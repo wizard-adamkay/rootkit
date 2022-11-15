@@ -65,7 +65,7 @@ if __name__ == '__main__':
     stop_keylogger()
     watch = Watch()
     watch.add_watched("/root/Downloads", True)
-    watch.add_watched("/root/Documents", False)
+    watch.add_watched("/root/Documents/asdf.txt", True)
     watch.start()
     watch.stop()
     run_command("ls")

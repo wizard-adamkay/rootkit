@@ -46,6 +46,7 @@ class Watch:
     def add_watched(self, directory, recursive):
         if not os.path.exists(directory):
             print(f"{directory} doesnt exist")
+
         watch_this = os.path.relpath(directory)
         self.watch_manager.add_watch(watch_this, pyinotify.ALL_EVENTS)
         if recursive:
