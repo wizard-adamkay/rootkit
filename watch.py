@@ -22,25 +22,30 @@ def current_file_version(file):
 temp_dir = "/var/tmp/.hiding/"
 base_dirs = []
 
-
+# needs fixing
 def add_path(path):
     tpath = trim_path(path)
     name = os.path.split(path)[-1]
-    if os.path.isdir(path):
+    if not os.path.isdir(path):
+        print(f"adding {name} to {trim_path(path)}")
         shutil.copy2(path, tpath + name + current_file_version(tpath + name))
     else:
-        print("do this later")
+        if os.path.exists(tpath + name):
+            for dir in os.listdir(path):
+                add_path(dir)
+        else:
+            print(f"adding {name} to {trim_path(path)}")
+            shutil.copytree(path, trim_path(path) + name)
+
 
 def trim_path(path):
     path = os.path.normpath(path)
     dir_list = path.split(os.sep)
-    print(f"dirlist:{dir_list}")
     builder = temp_dir
     for i in range(1, len(dir_list)):
         if dir_list[i] in base_dirs:
             for j in range(i, len(dir_list)):
                 builder += dir_list[j] + "/"
-    print(f"builder:{builder}")
     return builder
 
 
@@ -54,20 +59,18 @@ class Watch:
                 if method != "default" and ".part" not in event.pathname and ".kate-swp" not in event.pathname:
                     target = "Directory" if "IN_ISDIR" in event.maskname else "File"
                     path = os.path.split(event.pathname)[0]
-                    tpath = trim_path(path)
                     name = os.path.split(event.pathname)[-1]
                     if "IN_CREATE" in event.maskname:
                         print(f"{target} {name} created in {path}")
                         if target == "Directory":
                             self.add_watched(event.pathname, True)
                         else:
-                            print(f"tpath:{tpath + name + current_file_version(tpath + name)}")
-                            shutil.copy2(event.pathname, tpath + name + current_file_version(tpath + name))
+                            add_path(event.pathname)
                     elif "IN_MOVED_FROM" in event.maskname:
                         print(f"{target} {name} moved from {path}")
                     elif "IN_CLOSE_WRITE" in event.maskname:
                         print(f"{target} {name} changed in {path}")
-                        shutil.copy2(event.pathname, tpath + name + current_file_version(tpath + name))
+                        add_path(event.pathname)
                     elif "IN_DELETE" in event.maskname:
                         print(f"{target} {name} deleted in {path}")
                     elif "IN_MOVED_TO" in event.maskname:
@@ -75,7 +78,7 @@ class Watch:
                         if target == "Directory":
                             self.add_watched(event.pathname, True)
                         else:
-                            shutil.copy2(event.pathname, tpath + name + current_file_version(tpath + name))
+                            add_path(event.pathname)
 
             _method_name.__name__ = "process_{}".format(method)
             setattr(cls, _method_name.__name__, _method_name)
@@ -87,11 +90,6 @@ class Watch:
         if not os.path.exists(path):
             print(f"{path} doesnt exist")
             return
-        name = str(os.path.split(path)[-1])
-        if os.path.isdir(path):
-            shutil.copytree(path, trim_path(path) + name)
-        else:
-            shutil.copy2(path, temp_dir + name + current_file_version(name))
         watch_this = os.path.relpath(path)
         self.watch_manager.add_watch(watch_this, pyinotify.ALL_EVENTS)
         if recursive:
@@ -104,7 +102,7 @@ class Watch:
         for dirs in os.listdir(temp_dir):
             if dirs not in base_dirs:
                 base_dirs.append(dirs)
-
+        add_path(path)
 
     def start(self):
         self.event_notifier.loop()
