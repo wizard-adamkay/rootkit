@@ -11,10 +11,10 @@ class EventProcessor(pyinotify.ProcessEvent):
                 "default"]
 
 
-def current_file_version(file):
+def current_file_version(tpath):
     i = 0
     while True:
-        if not os.path.exists(temp_dir + file + str(i)):
+        if not os.path.exists(tpath + str(i)):
             return str(i)
         i += 1
 
@@ -25,27 +25,43 @@ base_dirs = []
 # needs fixing
 def add_path(path):
     tpath = trim_path(path)
-    name = os.path.split(path)[-1]
+    # name = os.path.split(path)[-1]
     if not os.path.isdir(path):
-        print(f"adding {name} to {trim_path(path)}")
-        shutil.copy2(path, tpath + name + current_file_version(tpath + name))
+        if tpath[-1] == "/":
+            tpath = tpath[0:-1]
+        print(f"adding to {tpath}")
+        shutil.copy2(path, tpath + current_file_version(tpath))
     else:
-        if os.path.exists(tpath + name):
+        if os.path.exists(tpath):
+            print(f"paths listed for {path}: {os.listdir(path)}")
             for dir in os.listdir(path):
-                add_path(dir)
+                add_path(path+"/"+dir)
         else:
-            print(f"adding {name} to {trim_path(path)}")
-            shutil.copytree(path, trim_path(path) + name)
+            shutil.copytree(path, tpath)
 
 
 def trim_path(path):
+    print(f"\ninitial path: {path}")
     path = os.path.normpath(path)
+    print(f"norm path: {path}")
     dir_list = path.split(os.sep)
+    print(f"dir list: {dir_list}")
     builder = temp_dir
+    found = False
+    print(f"base dirs: {base_dirs}")
     for i in range(1, len(dir_list)):
+        print(f"comparing {dir_list[i]}")
         if dir_list[i] in base_dirs:
+            found = True
+            print(f"found {dir_list[i]}")
             for j in range(i, len(dir_list)):
+                print(f"adding {dir_list[j]} to string builder")
                 builder += dir_list[j] + "/"
+            break
+    if not found:
+        builder += os.path.split(path)[-1]
+
+    print(f"builder: {builder}")
     return builder
 
 
@@ -53,6 +69,12 @@ class Watch:
     def __init__(self):
         self.watch_manager = pyinotify.WatchManager()
         self.event_notifier = pyinotify.Notifier(self.watch_manager, EventProcessor())
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        else:
+            for dirs in os.listdir(temp_dir):
+                if dirs not in base_dirs:
+                    base_dirs.append(dirs)
 
         def process_generator(cls, method):
             def _method_name(asdf, event):
@@ -87,11 +109,12 @@ class Watch:
             process_generator(EventProcessor, method)
 
     def add_watched(self, path, recursive):
+        if temp_dir in path:
+            print(f"cannot watch the temp dir")
+            return
         if not os.path.exists(path):
             print(f"{path} doesnt exist")
             return
-        watch_this = os.path.relpath(path)
-        self.watch_manager.add_watch(watch_this, pyinotify.ALL_EVENTS)
         if recursive:
             for roots, dirs, files in os.walk(path):
                 watch_this = os.path.relpath(roots)
@@ -99,10 +122,11 @@ class Watch:
         else:
             watch_this = os.path.relpath(path)
             self.watch_manager.add_watch(watch_this, pyinotify.ALL_EVENTS)
+        print(f"add_watched adding path: {path}")
+        add_path(path)
         for dirs in os.listdir(temp_dir):
             if dirs not in base_dirs:
                 base_dirs.append(dirs)
-        add_path(path)
 
     def start(self):
         self.event_notifier.loop()

