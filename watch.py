@@ -22,7 +22,7 @@ def current_file_version(tpath):
 temp_dir = "/var/tmp/.hiding/"
 base_dirs = []
 
-# needs fixing
+
 def add_path(path):
     tpath = trim_path(path)
     # name = os.path.split(path)[-1]
