@@ -41,32 +41,24 @@ def add_path(path):
 
 
 def trim_path(path):
-    print(f"\ninitial path: {path}")
     path = os.path.normpath(path)
-    print(f"norm path: {path}")
     dir_list = path.split(os.sep)
-    print(f"dir list: {dir_list}")
     builder = temp_dir
     found = False
-    print(f"base dirs: {base_dirs}")
     for i in range(1, len(dir_list)):
-        print(f"comparing {dir_list[i]}")
         if dir_list[i] in base_dirs:
             found = True
-            print(f"found {dir_list[i]}")
             for j in range(i, len(dir_list)):
-                print(f"adding {dir_list[j]} to string builder")
                 builder += dir_list[j] + "/"
             break
     if not found:
         builder += os.path.split(path)[-1]
-
-    print(f"builder: {builder}")
     return builder
 
 
 class Watch:
     def __init__(self):
+        self.started = False
         self.watch_manager = pyinotify.WatchManager()
         self.event_notifier = pyinotify.Notifier(self.watch_manager, EventProcessor())
         if not os.path.exists(temp_dir):
@@ -129,7 +121,17 @@ class Watch:
                 base_dirs.append(dirs)
 
     def start(self):
+        if self.started:
+            return
+        self.started = True
         self.event_notifier.loop()
 
     def stop(self):
+        if not self.started:
+            return
         self.event_notifier.stop()
+        self.started = False
+
+    def clear(self):
+        shutil.rmtree(temp_dir)
+        os.makedirs(temp_dir, exist_ok=True)

